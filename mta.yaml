@@ -1,0 +1,93 @@
+_schema-version: "3.1"
+ID: QUICK_BID
+description: A simple CAP project.
+version: 1.0.0
+modules:
+- name: QUICK_BID-srv
+  type: nodejs
+  path: gen/srv
+  requires:
+  - name: QUICK_BID-db
+  provides:
+  - name: srv-api
+    properties:
+      srv-url: ${default-url}
+  parameters:
+    buildpack: nodejs_buildpack
+    readiness-health-check-http-endpoint: /health
+    readiness-health-check-type: http
+  build-parameters:
+    builder: npm
+- name: QUICK_BID-db-deployer
+  type: hdb
+  path: gen/db
+  requires:
+  - name: QUICK_BID-db
+  parameters:
+    buildpack: nodejs_buildpack
+- name: QUICK_BID-destination-content
+  type: com.sap.application.content
+  requires:
+  - name: QUICK_BID-destination-service
+    parameters:
+      content-target: true
+  - name: QUICK_BID_html_repo_host
+    parameters:
+      service-key:
+        name: QUICK_BID_html_repo_host-key
+  - name: uaa_QUICK_BID
+    parameters:
+      service-key:
+        name: uaa_QUICK_BID-key
+  parameters:
+    content:
+      instance:
+        destinations:
+        - Name: Quick_bid_QUICK_BID_html_repo_host
+          ServiceInstanceName: QUICK_BID-html5-app-host-service
+          ServiceKeyName: QUICK_BID_html_repo_host-key
+          sap.cloud.service: Quick_bid
+        - Authentication: OAuth2UserTokenExchange
+          Name: Quick_bid_uaa_QUICK_BID
+          ServiceInstanceName: QUICK_BID-xsuaa-service
+          ServiceKeyName: uaa_QUICK_BID-key
+          sap.cloud.service: Quick_bid
+        existing_destinations_policy: ignore
+  build-parameters:
+    no-source: true
+resources:
+- name: QUICK_BID-db
+  type: com.sap.xs.hdi-container
+  parameters:
+    service: hana
+    service-plan: hdi-shared
+- name: QUICK_BID-destination-service
+  type: org.cloudfoundry.managed-service
+  parameters:
+    config:
+      HTML5Runtime_enabled: true
+      version: 1.0.0
+    service: destination
+    service-name: QUICK_BID-destination-service
+    service-plan: lite
+- name: QUICK_BID_html_repo_host
+  type: org.cloudfoundry.managed-service
+  parameters:
+    service: html5-apps-repo
+    service-name: QUICK_BID-html5-app-host-service
+    service-plan: app-host
+- name: uaa_QUICK_BID
+  type: org.cloudfoundry.managed-service
+  parameters:
+    path: ./xs-security.json
+    service: xsuaa
+    service-name: QUICK_BID-xsuaa-service
+    service-plan: application
+parameters:
+  enable-parallel-deployments: true
+build-parameters:
+  before-all:
+  - builder: custom
+    commands:
+    - npm ci
+    - npx cds build --production
